@@ -2,6 +2,7 @@ package destinationrules
 
 import (
 	"strconv"
+	"strings"
 
 	core_v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -27,10 +28,16 @@ func (n NoDestinationChecker) Check() ([]*models.IstioCheck, bool) {
 	if host, ok := n.DestinationRule.GetSpec()["host"]; ok {
 		if dHost, ok := host.(string); ok {
 			fqdn := kubernetes.ParseHost(dHost, n.DestinationRule.GetObjectMeta().Namespace, n.DestinationRule.GetObjectMeta().ClusterName)
-			if !n.hasMatchingService(fqdn.Service, dHost) {
-				validation := models.Build("destinationrules.nodest.matchingworkload", "spec/host")
-				validations = append(validations, &validation)
-				valid = false
+			if !n.hasMatchingService(fqdn, n.DestinationRule.GetObjectMeta().Namespace) {
+				if fqdn.Namespace != n.DestinationRule.GetObjectMeta().Namespace && fqdn.Namespace != "" {
+					validation := models.Build("validation.unable.cross-namespace", "spec/host")
+					valid = true
+					validations = append(validations, &validation)
+				} else {
+					validation := models.Build("destinationrules.nodest.matchingregistry", "spec/host")
+					valid = false
+					validations = append(validations, &validation)
+				}
 			}
 			if subsets, ok := n.DestinationRule.GetSpec()["subsets"]; ok {
 				if dSubsets, ok := subsets.([]interface{}); ok {
@@ -65,8 +72,8 @@ func (n NoDestinationChecker) Check() ([]*models.IstioCheck, bool) {
 }
 
 func (n NoDestinationChecker) hasMatchingWorkload(service string, subsetLabels map[string]string) bool {
-	// Check wildcard hosts
-	if service == "*" {
+	// Check wildcard hosts - needs to match "*" and "*.suffix" also..
+	if strings.HasPrefix(service, "*") {
 		return true
 	}
 
@@ -100,28 +107,41 @@ func (n NoDestinationChecker) hasMatchingWorkload(service string, subsetLabels m
 	return false
 }
 
-func (n NoDestinationChecker) hasMatchingService(service, origHost string) bool {
+func (n NoDestinationChecker) hasMatchingService(host kubernetes.Host, itemNamespace string) bool {
 	appLabel := config.Get().IstioLabels.AppLabelName
 
-	// Check wildcard hosts
-	if service == "*" {
+	// Check wildcard hosts - needs to match "*" and "*.suffix" also..
+	if strings.HasPrefix(host.Service, "*") {
 		return true
 	}
 
-	// Check Workloads
-	for _, wl := range n.WorkloadList.Workloads {
-		if service == wl.Labels[appLabel] {
-			return true
+	if host.Namespace == itemNamespace {
+		// Check Workloads
+		for _, wl := range n.WorkloadList.Workloads {
+			if host.Service == wl.Labels[appLabel] {
+				return true
+			}
+		}
+		// Check ServiceNames
+		for _, s := range n.Services {
+			if host.Service == s.Name {
+				return true
+			}
 		}
 	}
-	// Check ServiceNames
-	for _, s := range n.Services {
-		if service == s.Name {
-			return true
-		}
-	}
+
 	// Check ServiceEntries
-	if _, found := n.ServiceEntries[origHost]; found {
+	for k := range n.ServiceEntries {
+		hostKey := k
+		if i := strings.Index(k, "*"); i > -1 {
+			hostKey = k[i+1:]
+		}
+		if strings.HasSuffix(host.Service, hostKey) {
+			return true
+		}
+	}
+
+	if _, found := n.ServiceEntries[host.Service]; found {
 		return true
 	}
 	return false

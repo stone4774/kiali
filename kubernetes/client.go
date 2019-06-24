@@ -9,6 +9,7 @@ import (
 
 	osapps_v1 "github.com/openshift/api/apps/v1"
 	osproject_v1 "github.com/openshift/api/project/v1"
+	osroutes_v1 "github.com/openshift/api/route/v1"
 	apps_v1 "k8s.io/api/apps/v1"
 	auth_v1 "k8s.io/api/authorization/v1"
 	batch_v1 "k8s.io/api/batch/v1"
@@ -40,11 +41,12 @@ type IstioClientInterface interface {
 	CreateIstioObject(api, namespace, resourceType, json string) (IstioObject, error)
 	DeleteIstioObject(api, namespace, resourceType, name string) error
 	GetAdapter(namespace, adapterType, adapterName string) (IstioObject, error)
-	GetAdapters(namespace string) ([]IstioObject, error)
+	GetAdapters(namespace, labelSelector string) ([]IstioObject, error)
 	GetAuthorizationDetails(namespace string) (*RBACDetails, error)
 	GetCronJobs(namespace string) ([]batch_v1beta1.CronJob, error)
 	GetDeployment(namespace string, deploymentName string) (*apps_v1.Deployment, error)
 	GetDeployments(namespace string) ([]apps_v1.Deployment, error)
+	GetDeploymentsByLabel(namespace string, labelSelector string) ([]apps_v1.Deployment, error)
 	GetDeploymentConfig(namespace string, deploymentconfigName string) (*osapps_v1.DeploymentConfig, error)
 	GetDeploymentConfigs(namespace string) ([]osapps_v1.DeploymentConfig, error)
 	GetDestinationRule(namespace string, destinationrule string) (IstioObject, error)
@@ -54,7 +56,7 @@ type IstioClientInterface interface {
 	GetGateways(namespace string) ([]IstioObject, error)
 	GetIstioDetails(namespace string, serviceName string) (*IstioDetails, error)
 	GetIstioRule(namespace string, istiorule string) (IstioObject, error)
-	GetIstioRules(namespace string) ([]IstioObject, error)
+	GetIstioRules(namespace string, labelSelector string) ([]IstioObject, error)
 	GetJobs(namespace string) ([]batch_v1.Job, error)
 	GetNamespace(namespace string) (*core_v1.Namespace, error)
 	GetNamespaces(labelSelector string) ([]core_v1.Namespace, error)
@@ -69,6 +71,9 @@ type IstioClientInterface interface {
 	GetQuotaSpecBindings(namespace string) ([]IstioObject, error)
 	GetReplicationControllers(namespace string) ([]core_v1.ReplicationController, error)
 	GetReplicaSets(namespace string) ([]apps_v1.ReplicaSet, error)
+	GetRoute(namespace string, name string) (*osroutes_v1.Route, error)
+	GetSidecar(namespace string, sidecar string) (IstioObject, error)
+	GetSidecars(namespace string) ([]IstioObject, error)
 	GetSelfSubjectAccessReview(namespace, api, resourceType string, verbs []string) ([]*auth_v1.SelfSubjectAccessReview, error)
 	GetService(namespace string, serviceName string) (*core_v1.Service, error)
 	GetServices(namespace string, selectorLabels map[string]string) ([]core_v1.Service, error)
@@ -77,7 +82,7 @@ type IstioClientInterface interface {
 	GetStatefulSet(namespace string, statefulsetName string) (*apps_v1.StatefulSet, error)
 	GetStatefulSets(namespace string) ([]apps_v1.StatefulSet, error)
 	GetTemplate(namespace, templateType, templateName string) (IstioObject, error)
-	GetTemplates(namespace string) ([]IstioObject, error)
+	GetTemplates(namespace, labelSelector string) ([]IstioObject, error)
 	GetPolicy(namespace string, policyName string) (IstioObject, error)
 	GetPolicies(namespace string) ([]IstioObject, error)
 	GetMeshPolicy(namespace string, policyName string) (IstioObject, error)

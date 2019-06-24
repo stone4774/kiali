@@ -28,7 +28,6 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/kiali/kiali/business"
 	"github.com/kiali/kiali/config"
 	"github.com/kiali/kiali/config/security"
 	"github.com/kiali/kiali/log"
@@ -100,10 +99,9 @@ func main() {
 	internalmetrics.RegisterInternalMetrics()
 
 	// check if Jaeger is available
-	_, err := business.GetServices()
-	if err != nil {
-		business.JaegerAvailable = false
-		log.Errorf("Jaeger is not available : %s", err)
+	// we need first discover Jaeger
+	if config.Get().ExternalServices.Tracing.Enabled {
+		status.DiscoverJaeger()
 	}
 
 	// Start listening to requests
@@ -186,13 +184,16 @@ func validateConfig() error {
 		return fmt.Errorf("server static content root directory does not exist: %v", config.Get().Server.StaticContentRootDirectory)
 	}
 
-	validPathRegEx := regexp.MustCompile(`^\/[a-zA-Z\d_/\$]*$`)
+	validPathRegEx := regexp.MustCompile(`^\/[a-zA-Z0-9\-\._~!\$&\'()\*\+\,;=:@%/]*$`)
 	webRoot := config.Get().Server.WebRoot
 	if !validPathRegEx.MatchString(webRoot) {
-		return fmt.Errorf("web root must begin with a / and contain only alphanumerics: %v", webRoot)
+		return fmt.Errorf("web root must begin with a / and contain valid URL path characters: %v", webRoot)
 	}
 	if webRoot != "/" && strings.HasSuffix(webRoot, "/") {
 		return fmt.Errorf("web root must not contain a trailing /: %v", webRoot)
+	}
+	if strings.Contains(webRoot, "/../") {
+		return fmt.Errorf("for security purposes, web root must not contain '/../': %v", webRoot)
 	}
 
 	// log some messages to let the administrator know when credentials are configured certain ways

@@ -2,8 +2,8 @@ package prometheus
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
@@ -11,6 +11,9 @@ import (
 	"github.com/prometheus/common/model"
 
 	"github.com/kiali/kiali/config"
+	"github.com/kiali/kiali/kubernetes"
+	"github.com/kiali/kiali/log"
+	"github.com/kiali/kiali/util/httputil"
 )
 
 // ClientInterface for mocks (only mocked function are necessary here)
@@ -40,10 +43,30 @@ type Client struct {
 // NewClient creates a new client to the Prometheus API.
 // It returns an error on any problem.
 func NewClient() (*Client, error) {
-	if config.Get() == nil {
-		return nil, errors.New("config.Get() must be not null")
+	cfg := config.Get().ExternalServices.Prometheus
+	clientConfig := api.Config{Address: cfg.URL}
+
+	// Be sure to copy config.Auth and not modify the existing
+	auth := cfg.Auth
+	if auth.UseKialiToken {
+		// Note: if we are using the 'bearer' authentication method then we want to use the Kiali
+		// service account token and not the user's token. This is because Kiali does filtering based
+		// on the user's token and prevents people who shouldn't have access to particular metrics.
+		token, err := kubernetes.GetKialiToken()
+		if err != nil {
+			log.Errorf("Could not read the Kiali Service Account token: %v", err)
+			return nil, err
+		}
+		auth.Token = token
 	}
-	p8s, err := api.NewClient(api.Config{Address: config.Get().ExternalServices.Prometheus.URL})
+
+	transportConfig, err := httputil.AuthTransport(&auth, api.DefaultRoundTripper.(*http.Transport))
+	if err != nil {
+		return nil, err
+	}
+	clientConfig.RoundTripper = transportConfig
+
+	p8s, err := api.NewClient(clientConfig)
 	if err != nil {
 		return nil, err
 	}

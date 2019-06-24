@@ -24,13 +24,11 @@ const (
 	EnvIdentityCertFile       = "IDENTITY_CERT_FILE"
 	EnvIdentityPrivateKeyFile = "IDENTITY_PRIVATE_KEY_FILE"
 
-	EnvPrometheusServiceURL       = "PROMETHEUS_SERVICE_URL"
-	EnvPrometheusCustomMetricsURL = "PROMETHEUS_CUSTOM_METRICS_URL"
-	EnvInCluster                  = "IN_CLUSTER"
-	EnvIstioIdentityDomain        = "ISTIO_IDENTITY_DOMAIN"
-	EnvIstioSidecarAnnotation     = "ISTIO_SIDECAR_ANNOTATION"
-	EnvIstioUrlServiceVersion     = "ISTIO_URL_SERVICE_VERSION"
-	EnvApiNamespacesExclude       = "API_NAMESPACES_EXCLUDE"
+	EnvInCluster              = "IN_CLUSTER"
+	EnvIstioIdentityDomain    = "ISTIO_IDENTITY_DOMAIN"
+	EnvIstioSidecarAnnotation = "ISTIO_SIDECAR_ANNOTATION"
+	EnvIstioUrlServiceVersion = "ISTIO_URL_SERVICE_VERSION"
+	EnvApiNamespacesExclude   = "API_NAMESPACES_EXCLUDE"
 
 	EnvServerAddress                    = "SERVER_ADDRESS"
 	EnvServerPort                       = "SERVER_PORT"
@@ -41,21 +39,28 @@ const (
 	EnvServerMetricsPort                = "SERVER_METRICS_PORT"
 	EnvServerMetricsEnabled             = "SERVER_METRICS_ENABLED"
 
-	EnvGrafanaDisplayLink              = "GRAFANA_DISPLAY_LINK"
-	EnvGrafanaURL                      = "GRAFANA_URL"
-	EnvGrafanaServiceNamespace         = "GRAFANA_SERVICE_NAMESPACE"
-	EnvGrafanaService                  = "GRAFANA_SERVICE"
-	EnvGrafanaWorkloadDashboardPattern = "GRAFANA_WORKLOAD_DASHBOARD_PATTERN"
-	EnvGrafanaServiceDashboardPattern  = "GRAFANA_SERVICE_DASHBOARD_PATTERN"
-	EnvGrafanaVarNamespace             = "GRAFANA_VAR_NAMESPACE"
-	EnvGrafanaVarService               = "GRAFANA_VAR_SERVICE"
-	EnvGrafanaVarWorkload              = "GRAFANA_VAR_WORKLOAD"
-	EnvGrafanaAPIKey                   = "GRAFANA_API_KEY"
-	EnvGrafanaUsername                 = "GRAFANA_USERNAME"
-	EnvGrafanaPassword                 = "GRAFANA_PASSWORD"
+	EnvAuthSuffixType               = "_AUTH_TYPE"
+	EnvAuthSuffixUsername           = "_USERNAME"
+	EnvAuthSuffixPassword           = "_PASSWORD"
+	EnvAuthSuffixToken              = "_TOKEN"
+	EnvAuthSuffixUseKialiToken      = "_USE_KIALI_TOKEN"
+	EnvAuthSuffixCAFile             = "_CA_FILE"
+	EnvAuthSuffixInsecureSkipVerify = "_INSECURE_SKIP_VERIFY"
 
-	EnvJaegerURL     = "JAEGER_URL"
-	EnvJaegerService = "JAEGER_SERVICE"
+	EnvPrometheusServiceURL       = "PROMETHEUS_SERVICE_URL"
+	EnvPrometheusCustomMetricsURL = "PROMETHEUS_CUSTOM_METRICS_URL"
+
+	EnvGrafanaDisplayLink  = "GRAFANA_DISPLAY_LINK"
+	EnvGrafanaInClusterURL = "GRAFANA_IN_CLUSTER_URL"
+	EnvGrafanaURL          = "GRAFANA_URL"
+
+	EnvTracingEnabled          = "TRACING_ENABLED"
+	EnvTracingURL              = "TRACING_URL"
+	EnvTracingServiceNamespace = "TRACING_SERVICE_NAMESPACE"
+
+	EnvThreeScaleAdapterName = "THREESCALE_ADAPTER_NAME"
+	EnvThreeScaleServiceName = "THREESCALE_SERVICE_NAME"
+	EnvThreeScaleServicePort = "THREESCALE_SERVICE_PORT"
 
 	EnvLoginTokenSigningKey        = "LOGIN_TOKEN_SIGNING_KEY"
 	EnvLoginTokenExpirationSeconds = "LOGIN_TOKEN_EXPIRATION_SECONDS"
@@ -89,6 +94,11 @@ const (
 	TokenCookieName             = "kiali-token"
 	AuthStrategyOpenshiftIssuer = "kiali-openshift"
 	AuthStrategyLoginIssuer     = "kiali-login"
+
+	// These constants are used for external services auth (Prometheus, Grafana ...) ; not for Kiali auth
+	AuthTypeBasic  = "basic"
+	AuthTypeBearer = "bearer"
+	AuthTypeNone   = "none"
 )
 
 // the paths we expect the login secret to be located
@@ -114,32 +124,42 @@ type Server struct {
 	MetricsEnabled             bool                 `yaml:"metrics_enabled,omitempty"`
 }
 
+// Auth provides authentication data for external services
+type Auth struct {
+	Type               string `yaml:"type"`
+	Username           string `yaml:"username"`
+	Password           string `yaml:"password"`
+	Token              string `yaml:"token"`
+	UseKialiToken      bool   `yaml:"use_kiali_token"`
+	CAFile             string `yaml:"ca_file"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
+}
+
 // PrometheusConfig describes configuration of the Prometheus component
 type PrometheusConfig struct {
 	URL              string `yaml:"url,omitempty"`
 	CustomMetricsURL string `yaml:"custom_metrics_url,omitempty"`
+	Auth             Auth   `yaml:"auth,omitempty"`
 }
 
 // GrafanaConfig describes configuration used for Grafana links
 type GrafanaConfig struct {
-	DisplayLink              bool   `yaml:"display_link"`
-	URL                      string `yaml:"url"`
-	ServiceNamespace         string `yaml:"service_namespace"`
-	Service                  string `yaml:"service"`
-	WorkloadDashboardPattern string `yaml:"workload_dashboard_pattern"`
-	ServiceDashboardPattern  string `yaml:"service_dashboard_pattern"`
-	VarNamespace             string `yaml:"var_namespace"`
-	VarService               string `yaml:"var_service"`
-	VarWorkload              string `yaml:"var_workload"`
-	APIKey                   string `yaml:"api_key"`
-	Username                 string `yaml:"username"`
-	Password                 string `yaml:"password"`
+	DisplayLink  bool   `yaml:"display_link"`
+	InClusterURL string `yaml:"in_cluster_url"`
+	URL          string `yaml:"url"`
+	Auth         Auth   `yaml:"auth"`
 }
 
-// JaegerConfig describes configuration used for jaeger links
-type JaegerConfig struct {
-	URL     string `yaml:"url"`
-	Service string `yaml:"service"`
+// TracingConfig describes configuration used for tracing links
+type TracingConfig struct {
+	// Enable autodiscover and Jaeger in Kiali
+	Enabled   bool   `yaml:"enabled"`
+	Namespace string `yaml:"namespace"`
+	Service   string `yaml:"service"`
+	URL       string `yaml:"url"`
+	Auth      Auth   `yaml:"auth"`
+	// Path store the value of QUERY_BASE_PATH
+	Path string `yaml:"-"`
 }
 
 // IstioConfig describes configuration used for istio links
@@ -149,12 +169,20 @@ type IstioConfig struct {
 	IstioSidecarAnnotation string `yaml:"istio_sidecar_annotation,omitempty"`
 }
 
+// ThreeScaleConfig describes configuration used for 3Scale adapter
+type ThreeScaleConfig struct {
+	AdapterName    string `yaml:"adapter_name"`
+	AdapterService string `yaml:"adapter_service"`
+	AdapterPort    string `yaml:"adapter_port"`
+}
+
 // ExternalServices holds configurations for other systems that Kiali depends on
 type ExternalServices struct {
 	Istio      IstioConfig      `yaml:"istio,omitempty"`
 	Prometheus PrometheusConfig `yaml:"prometheus,omitempty"`
 	Grafana    GrafanaConfig    `yaml:"grafana,omitempty"`
-	Jaeger     JaegerConfig     `yaml:"jaeger,omitempty"`
+	Tracing    TracingConfig    `yaml:"tracing,omitempty"`
+	ThreeScale ThreeScaleConfig `yaml:"threescale,omitempty"`
 }
 
 // LoginToken holds config used in token-based authentication
@@ -193,6 +221,11 @@ type AuthConfig struct {
 	Strategy string `yaml:"strategy,omitempty"`
 }
 
+// DeploymentConfig provides details on how Kiali was deployed.
+type DeploymentConfig struct {
+	AccessibleNamespaces []string `yaml:"accessible_namespaces"`
+}
+
 // Config defines full YAML configuration.
 type Config struct {
 	Identity         security.Identity `yaml:",omitempty"`
@@ -206,6 +239,7 @@ type Config struct {
 	KubernetesConfig KubernetesConfig  `yaml:"kubernetes_config,omitempty"`
 	API              ApiConfig         `yaml:"api,omitempty"`
 	Auth             AuthConfig        `yaml:"auth,omitempty"`
+	Deployment       DeploymentConfig  `yaml:"deployment,omitempty"`
 }
 
 // NewConfig creates a default Config struct
@@ -239,34 +273,32 @@ func NewConfig() (c *Config) {
 	c.Server.MetricsEnabled = getDefaultBool(EnvServerMetricsEnabled, true)
 
 	// Prometheus configuration
-	c.ExternalServices.Prometheus.URL = strings.TrimSpace(getDefaultString(EnvPrometheusServiceURL, "http://prometheus.istio-system:9090"))
+	c.ExternalServices.Prometheus.URL = strings.TrimSpace(getDefaultString(EnvPrometheusServiceURL, fmt.Sprintf("http://prometheus.%s:9090", c.IstioNamespace)))
 	c.ExternalServices.Prometheus.CustomMetricsURL = strings.TrimSpace(getDefaultString(EnvPrometheusCustomMetricsURL, c.ExternalServices.Prometheus.URL))
+	c.ExternalServices.Prometheus.Auth = getAuthFromEnv("PROMETHEUS")
 
 	// Grafana Configuration
 	c.ExternalServices.Grafana.DisplayLink = getDefaultBool(EnvGrafanaDisplayLink, true)
+	c.ExternalServices.Grafana.InClusterURL = strings.TrimSpace(getDefaultString(EnvGrafanaInClusterURL, ""))
 	c.ExternalServices.Grafana.URL = strings.TrimSpace(getDefaultString(EnvGrafanaURL, ""))
-	c.ExternalServices.Grafana.ServiceNamespace = strings.TrimSpace(getDefaultString(EnvGrafanaServiceNamespace, "istio-system"))
-	c.ExternalServices.Grafana.Service = strings.TrimSpace(getDefaultString(EnvGrafanaService, "grafana"))
-	c.ExternalServices.Grafana.WorkloadDashboardPattern = strings.TrimSpace(getDefaultString(EnvGrafanaWorkloadDashboardPattern, "Istio%20Workload%20Dashboard"))
-	c.ExternalServices.Grafana.ServiceDashboardPattern = strings.TrimSpace(getDefaultString(EnvGrafanaServiceDashboardPattern, "Istio%20Service%20Dashboard"))
-	c.ExternalServices.Grafana.VarNamespace = strings.TrimSpace(getDefaultString(EnvGrafanaVarNamespace, "var-namespace"))
-	c.ExternalServices.Grafana.VarService = strings.TrimSpace(getDefaultString(EnvGrafanaVarService, "var-service"))
-	c.ExternalServices.Grafana.VarWorkload = strings.TrimSpace(getDefaultString(EnvGrafanaVarWorkload, "var-workload"))
-	c.ExternalServices.Grafana.APIKey = strings.TrimSpace(getDefaultString(EnvGrafanaAPIKey, ""))
-	c.ExternalServices.Grafana.Username = strings.TrimSpace(getDefaultString(EnvGrafanaUsername, ""))
-	c.ExternalServices.Grafana.Password = strings.TrimSpace(getDefaultString(EnvGrafanaPassword, ""))
-	if c.ExternalServices.Grafana.Username != "" && c.ExternalServices.Grafana.Password == "" {
-		log.Error("Grafana username (\"GRAFANA_USERNAME\") requires that Grafana password (\"GRAFANA_PASSWORD\") is set.")
-	}
+	c.ExternalServices.Prometheus.Auth = getAuthFromEnv("GRAFANA")
 
-	// Jaeger Configuration
-	c.ExternalServices.Jaeger.URL = strings.TrimSpace(getDefaultString(EnvJaegerURL, ""))
-	c.ExternalServices.Jaeger.Service = strings.TrimSpace(getDefaultString(EnvJaegerService, "jaeger-query"))
+	// Tracing Configuration
+	c.ExternalServices.Tracing.Enabled = getDefaultBool(EnvTracingEnabled, true)
+	c.ExternalServices.Tracing.Path = ""
+	c.ExternalServices.Tracing.URL = strings.TrimSpace(getDefaultString(EnvTracingURL, ""))
+	c.ExternalServices.Tracing.Namespace = strings.TrimSpace(getDefaultString(EnvTracingServiceNamespace, c.IstioNamespace))
+	c.ExternalServices.Tracing.Auth = getAuthFromEnv("TRACING")
 
 	// Istio Configuration
 	c.ExternalServices.Istio.IstioIdentityDomain = strings.TrimSpace(getDefaultString(EnvIstioIdentityDomain, "svc.cluster.local"))
 	c.ExternalServices.Istio.IstioSidecarAnnotation = strings.TrimSpace(getDefaultString(EnvIstioSidecarAnnotation, "sidecar.istio.io/status"))
 	c.ExternalServices.Istio.UrlServiceVersion = strings.TrimSpace(getDefaultString(EnvIstioUrlServiceVersion, "http://istio-pilot:8080/version"))
+
+	// ThreeScale Configuration
+	c.ExternalServices.ThreeScale.AdapterName = strings.TrimSpace(getDefaultString(EnvThreeScaleAdapterName, "threescale"))
+	c.ExternalServices.ThreeScale.AdapterService = strings.TrimSpace(getDefaultString(EnvThreeScaleServiceName, "threescale-istio-adapter"))
+	c.ExternalServices.ThreeScale.AdapterPort = strings.TrimSpace(getDefaultString(EnvThreeScaleServicePort, "3333"))
 
 	// Token-based authentication Configuration
 	c.LoginToken.SigningKey = strings.TrimSpace(getDefaultString(EnvLoginTokenSigningKey, "kiali"))
@@ -291,6 +323,8 @@ func NewConfig() (c *Config) {
 
 	c.Auth.Strategy = getDefaultString(EnvAuthStrategy, AuthStrategyLogin)
 
+	c.Deployment.AccessibleNamespaces = getDefaultStringArray("_not_overridable_via_env", "**")
+
 	return
 }
 
@@ -303,6 +337,8 @@ func Get() (conf *Config) {
 }
 
 // Set the global Config
+// This function should not be called outside of main or tests.
+// If possible keep config unmutated and use globals and/or appstate package for mutable states to avoid concurrent writes risk.
 func Set(conf *Config) {
 	rwMutex.Lock()
 	defer rwMutex.Unlock()
@@ -448,4 +484,23 @@ func SaveToFile(filename string, conf *Config) (err error) {
 	log.Debugf("Writing YAML config to [%s]", filename)
 	err = ioutil.WriteFile(filename, []byte(fileContent), 0640)
 	return
+}
+
+func getAuthFromEnv(prefix string) Auth {
+	auth := Auth{}
+	auth.Type = strings.TrimSpace(getDefaultString(prefix+EnvAuthSuffixType, AuthTypeNone))
+	switch auth.Type {
+	case AuthTypeBasic:
+		auth.Username = strings.TrimSpace(getDefaultString(prefix+EnvAuthSuffixUsername, ""))
+		auth.Password = strings.TrimSpace(getDefaultString(prefix+EnvAuthSuffixPassword, ""))
+	case AuthTypeBearer:
+		auth.Token = strings.TrimSpace(getDefaultString(prefix+EnvAuthSuffixToken, ""))
+		auth.UseKialiToken = getDefaultBool(prefix+EnvAuthSuffixUseKialiToken, false)
+	case AuthTypeNone:
+	default:
+		log.Errorf("Unknown authentication strategy for %s: '%s'. Valid options are %s, %s or %s", prefix, auth.Type, AuthTypeNone, AuthTypeBasic, AuthTypeBearer)
+	}
+	auth.InsecureSkipVerify = getDefaultBool(prefix+EnvAuthSuffixInsecureSkipVerify, false)
+	auth.CAFile = strings.TrimSpace(getDefaultString(prefix+EnvAuthSuffixCAFile, ""))
+	return auth
 }

@@ -24,6 +24,10 @@ const (
 	gatewayType     = "Gateway"
 	gatewayTypeList = "GatewayList"
 
+	sidecars        = "sidecars"
+	sidecarType     = "Sidecar"
+	sidecarTypeList = "SidecarList"
+
 	serviceentries       = "serviceentries"
 	serviceentryType     = "ServiceEntry"
 	serviceentryTypeList = "ServiceEntryList"
@@ -266,6 +270,10 @@ var (
 		{
 			objectKind:     serviceentryType,
 			collectionKind: serviceentryTypeList,
+		},
+		{
+			objectKind:     sidecarType,
+			collectionKind: sidecarTypeList,
 		},
 	}
 
@@ -528,6 +536,7 @@ var (
 		virtualServices:  virtualServiceType,
 		destinationRules: destinationRuleType,
 		serviceentries:   serviceentryType,
+		sidecars:         sidecarType,
 
 		// Main Config files
 		rules:             ruleType,
@@ -771,37 +780,45 @@ func (in *GenericIstioObjectList) DeepCopyObject() runtime.Object {
 
 // Host represents the FQDN format for Istio hostnames
 type Host struct {
-	Service   string
-	Namespace string
-	Cluster   string
+	Service       string
+	Namespace     string
+	Cluster       string
+	CompleteInput bool
 }
 
-// Parse takes as an input a hostname (simple or full FQDN), namespace and clusterName and returns a parsed Host struct
+// ParseHost takes as an input a hostname (simple or full FQDN), namespace and clusterName and returns a parsed Host struct
 func ParseHost(hostName, namespace, cluster string) Host {
+	if cluster == "" {
+		cluster = config.Get().ExternalServices.Istio.IstioIdentityDomain
+	}
+
 	domainParts := strings.Split(hostName, ".")
 	host := Host{
 		Service: domainParts[0],
 	}
 	if len(domainParts) > 1 {
-		host.Namespace = domainParts[1]
-
 		if len(domainParts) > 2 {
-			host.Cluster = strings.Join(domainParts[2:], ".")
+			parsedClusterName := strings.Join(domainParts[2:], ".")
+			if parsedClusterName == cluster {
+				// FQDN input
+				host.Cluster = cluster
+				host.CompleteInput = true
+			}
 		}
-	}
 
-	// Fill in missing details, we take precedence from the full hostname and not from DestinationRule details
-	if host.Cluster == "" {
-		if cluster != "" {
-			host.Cluster = cluster
+		if host.CompleteInput {
+			host.Namespace = domainParts[1]
 		} else {
-			host.Cluster = config.Get().ExternalServices.Istio.IstioIdentityDomain
+			// ServiceEntry or broken hostname
+			host.Service = hostName
 		}
+	} else {
+		// Simple format
+		host.Namespace = namespace
+		host.Cluster = cluster
+		host.CompleteInput = true
 	}
 
-	if host.Namespace == "" {
-		host.Namespace = namespace
-	}
 	return host
 }
 

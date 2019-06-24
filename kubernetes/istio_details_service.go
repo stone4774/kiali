@@ -201,6 +201,48 @@ func (in *IstioClient) GetVirtualServices(namespace string, serviceName string) 
 	return virtualServices, nil
 }
 
+// GetSidecars return all Sidecars for a given namespace.
+// It returns an error on any problem
+func (in *IstioClient) GetSidecars(namespace string) ([]IstioObject, error) {
+	result, err := in.istioNetworkingApi.Get().Namespace(namespace).Resource(sidecars).Do().Get()
+	if err != nil {
+		return nil, err
+	}
+	sidecarList, ok := result.(*GenericIstioObjectList)
+	if !ok {
+		return nil, fmt.Errorf("%s doesn't return a Sidecar list", namespace)
+	}
+	typeMeta := meta_v1.TypeMeta{
+		Kind:       PluralType[sidecars],
+		APIVersion: ApiNetworkingVersion,
+	}
+	sidecars := make([]IstioObject, 0)
+	for _, sidecar := range sidecarList.GetItems() {
+		sc := sidecar.DeepCopyIstioObject()
+		sc.SetTypeMeta(typeMeta)
+		sidecars = append(sidecars, sc)
+	}
+	return sidecars, nil
+}
+
+func (in *IstioClient) GetSidecar(namespace string, sidecar string) (IstioObject, error) {
+	result, err := in.istioNetworkingApi.Get().Namespace(namespace).Resource(sidecars).SubResource(sidecar).Do().Get()
+	if err != nil {
+		return nil, err
+	}
+	typeMeta := meta_v1.TypeMeta{
+		Kind:       PluralType[sidecars],
+		APIVersion: ApiNetworkingVersion,
+	}
+	sidecarObject, ok := result.(*GenericIstioObject)
+	if !ok {
+		return nil, fmt.Errorf("%s/%s doesn't return a Sidecar object", namespace, sidecar)
+	}
+	sc := sidecarObject.DeepCopyIstioObject()
+	sc.SetTypeMeta(typeMeta)
+	return sc, nil
+}
+
 func (in *IstioClient) GetVirtualService(namespace string, virtualservice string) (IstioObject, error) {
 	result, err := in.istioNetworkingApi.Get().Namespace(namespace).Resource(virtualServices).SubResource(virtualservice).Do().Get()
 	if err != nil {
@@ -937,43 +979,6 @@ func GatewayNames(gateways [][]IstioObject) map[string]struct{} {
 		}
 	}
 	return names
-}
-
-// ValidateVirtualServiceGateways checks all VirtualService gateways (except mesh, which is reserved word) and checks that they're found from the given list of gatewayNames. Also return index of missing gatways to show clearer error path in editor
-func ValidateVirtualServiceGateways(spec map[string]interface{}, gatewayNames map[string]struct{}, namespace, clusterName string) (bool, int) {
-	if clusterName == "" {
-		clusterName = config.Get().ExternalServices.Istio.IstioIdentityDomain
-	}
-	if gatewaysSpec, found := spec["gateways"]; found {
-		if gateways, ok := gatewaysSpec.([]interface{}); ok {
-			for index, g := range gateways {
-				if gate, ok := g.(string); ok {
-					if gate == "mesh" {
-						return true, -1
-					}
-					var hostname string
-					if strings.Contains(gate, "/") {
-						parts := strings.Split(gate, "/")
-						hostname = Host{
-							Service:   parts[1],
-							Namespace: parts[0],
-							Cluster:   clusterName,
-						}.String()
-					} else {
-						hostname = ParseHost(gate, namespace, clusterName).String()
-					}
-					for gw := range gatewayNames {
-						if found := FilterByHost(hostname, gw, namespace); found {
-							return true, -1
-						}
-					}
-					return false, index
-				}
-			}
-		}
-	}
-	// No gateways defined or all found. Return -1 indicates no missing gateway
-	return true, -1
 }
 
 func PolicyHasStrictMTLS(policy IstioObject) bool {

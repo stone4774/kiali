@@ -61,6 +61,7 @@ type SeverityLevel string
 const (
 	ErrorSeverity   SeverityLevel = "error"
 	WarningSeverity SeverityLevel = "warning"
+	Unknown         SeverityLevel = "unknown"
 )
 
 var ObjectTypeSingular = map[string]string{
@@ -83,8 +84,8 @@ var checkDescriptors = map[string]IstioCheck{
 		Message:  "More than one DestinationRules for the same host subset combination",
 		Severity: WarningSeverity,
 	},
-	"destinationrules.nodest.matchingworkload": {
-		Message:  "This host has no matching workloads",
+	"destinationrules.nodest.matchingregistry": {
+		Message:  "This host has no matching entry in the service registry (service, workload or service entries)",
 		Severity: ErrorSeverity,
 	},
 	"destinationrules.nodest.subsetlabels": {
@@ -113,6 +114,10 @@ var checkDescriptors = map[string]IstioCheck{
 	},
 	"gateways.multimatch": {
 		Message:  "More than one Gateway for the same host port combination",
+		Severity: WarningSeverity,
+	},
+	"gateways.selector": {
+		Message:  "No matching workload found for gateway selector in this namespace",
 		Severity: WarningSeverity,
 	},
 	"port.name.mismatch": {
@@ -183,6 +188,10 @@ var checkDescriptors = map[string]IstioCheck{
 		Message:  "Service port and deployment port do not match",
 		Severity: ErrorSeverity,
 	},
+	"validation.unable.cross-namespace": {
+		Message:  "Unable to verify the validity, cross-namespace validation is not supported for this field",
+		Severity: Unknown,
+	},
 }
 
 func Build(checkId string, path string) IstioCheck {
@@ -249,7 +258,17 @@ func (iv IstioValidations) MergeValidations(validations IstioValidations) IstioV
 		if !ok {
 			iv[key] = validation
 		} else {
-			v.Checks = append(v.Checks, validation.Checks...)
+		AddUnique:
+			for _, toAdd := range validation.Checks {
+				for _, existing := range v.Checks {
+					if toAdd.Path == existing.Path &&
+						toAdd.Severity == existing.Severity &&
+						toAdd.Message == existing.Message {
+						continue AddUnique
+					}
+				}
+				v.Checks = append(v.Checks, toAdd)
+			}
 			v.Valid = v.Valid && validation.Valid
 		}
 	}

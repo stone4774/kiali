@@ -2,6 +2,8 @@ apiVersion: kiali.io/v1alpha1
 kind: Kiali
 metadata:
   name: kiali
+annotations:
+  ansible.operator-sdk/reconcile-period: "0s"
 spec:
 
 ###################################################################
@@ -42,6 +44,13 @@ spec:
 # 'label_selector' is optional and takes a string value of a Kubernetes label selector
 # (e.g. "myLabel=myValue") which is used when fetching the list of available namespaces.
 # This does not affect explicit namespace access.
+# Note that if you do not set this but deployment.accessible_namespaces does not have the
+# special "all namespaces" value of "**" then this label_selector will be set
+# to a default value of "kiali.io/member-of=<deployment.namespace>" where
+# <deployment.namespace> is the namespace where Kiali is to be installed.
+# If deployment.accessible_namespaces does not have the special value of "**"
+# then the Kiali operator will add a new label to all accessible namespaces - that new
+# label will be this label_selector.
 #
 #    ---
 #    namespaces:
@@ -71,6 +80,16 @@ spec:
 #  ---
 #  deployment:
 #
+# A list of namespaces Kiali is to be given access to.
+# These namespaces have service mesh components that are to be observed by Kiali.
+# You can provide names using regex expressions matched against all namespaces the operator can see.
+# The default makes all namespaces accessible except for some internal namespaces that typically should be ignored.
+# NOTE! If this has an entry with the special value of "**" (two asterisks), that will denote you want
+# Kiali to be given access to all namespaces via a single cluster role (if using this special value of "**",
+# you are required to have already granted the operator permissions to create cluster roles and cluster role bindings).
+#    ---
+#    accessible_namespaces: ["^((?!(istio-operator|kube.*|openshift.*|ibm.*|kiali-operator)).)*$"]
+#
 # Additional custom yaml to add to the service definition. This is used mainly to customize the service type.
 # For example, if the deployment.service_type is set to "LoadBalancer" and you want to set the loadBalancerIP,
 # you can do so here with: additional_service_yaml: { "loadBalancerIP": "78.11.24.19" }.
@@ -97,6 +116,11 @@ spec:
 #    ---
 #    image_version: "lastrelease"
 #
+# Determines if the Kiali endpoint should be exposed externally.
+# If true, an Ingress will be created if on Kubernetes or a Route if on OpenShift.
+#    ---
+#    ingress_enabled: true
+#
 # The namespace into which Kiali is to be installed.
 #    ---
 #    namespace: "istio-system"
@@ -115,7 +139,7 @@ spec:
 # Determines which priority levels of log messages Kiali will output.
 # Typical values are "3" for INFO and higher priority, "4" for DEBUG and higher priority.
 #    ---
-#    verbose_mode: "4"
+#    verbose_mode: "3"
 #
 # Kiali resources will be assigned a "version" label when they are deployed.
 # This determines what value those "version" labels will have.
@@ -138,34 +162,35 @@ spec:
 #  external_services:
 #
 # **Grafana-specific settings:
-# api_key: API key to access Grafana. API key only requires viewer permissions.
+# auth: authentication settings to connect to Grafana:
+#   ca_file: The certificate authority file to use when accessing Grafana using https. An empty string means no extra
+#       certificate authority file is used. Default is an empty string.
+#   insecure_skip_verify: Set true to skip verifying certificate validity when Kiali contacts Grafana over https.
+#   password: Password to be used when making requests to Grafana, for basic authentication. User only requires viewer permissions.
+#   token: Token / API key to access Grafana, for token-based authentication. It only requires viewer permissions.
+#   type: The type of authentication to use when contacting the server from the Kiali backend. Use "bearer" to send the
+#       token to the Prometheus server. Use "basic" to connect with username and password credentials. Use "none" to not use any authentication.
+#       Default is "none"
+#   use_kiali_token: When true and if auth.type is "bearer", the same OAuth token used for authentication in Kiali will be used for the API calls to Grafana,
+#       and auth.token config is ignored then.
+#   username: Username to be used when making requests to Grafana, for basic authentication. User only requires viewer permissions.
 # display_link: When true, a link to Grafana will be displayed for more dashboards.
-# password: Password to be used when making requests to Grafana. User only requires viewer permissions.
-# service: The Kubernetes service name for Grafana. Kiali uses this to connect within the cluster to Grafana.
-#          If "service" and "service_namespace" are empty then "url" is used for communication.
-# service_dashboard_pattern: Search pattern for Grafana Service dashboard.
-# service_namespace: The Kubernetes namespace that holds the Grafana service (if empty, assumes the same value as deployment.namespace)
+# in_cluster_url: Set URL for in-cluster access. Example: "http://grafana.istio-system:3000".
 # url: The URL that Kiali uses when integrating with Grafana. This URL must be accessible to clients external to
 #      the cluster in order for the integration to work properly. If empty, an attempt to auto-discover it is made.
-# username: Username to be used when making requests to Grafana. User only requires viewer permissions.
-# var_namespace: The name of the Grafana variable that controls namespaces in dashboards.
-# var_service: The name of the Grafana variable that controls services in dashboards.
-# var_workload: The name of the Grafana variable that controls workloads in dashboards.
-# workload_dashboard_pattern: Search pattern for Grafana Workload dashboard.
 #    ---
 #    grafana:
-#      api_key: ""
-#      display_link: "true"
-#      password: ""
-#      service: "grafana"
-#      service_dashboard_pattern: "Istio%20Service%20Dashboard"
-#      service_namespace: ""
+#      auth:
+#        ca_file: ""
+#        insecure_skip_verify: false
+#        password: ""
+#        token: ""
+#        type: "none"
+#        use_kiali_token: false
+#        username: ""
+#      display_link: true
+#      in_cluster_url: "http://grafana.istio-system:3000"
 #      url: ""
-#      username: ""
-#      var_namespace: "var-namespace"
-#      var_service: "var-service"
-#      var_workload: "var-workload"
-#      workload_dashboard_pattern: "Istio%20Workload%20Dashboard"
 #
 # **Istio-specific settings:
 # istio_identity_domain: The annotation used by Istio to identify domains.
@@ -178,16 +203,20 @@ spec:
 #      istio_sidecar_annotation: "sidecar.istio.io/status"
 #      url_service_version: ""
 #
-# **Jaeger-specific settings:
-# service: The Kubernetes service name for Jaeger. Kiali uses this to connect within the cluster to Jaeger.
-# url: The URL that Kiali uses when integrating with Jaeger. This URL must be accessible to clients external to
-#      the cluster in order for the integration to work properly. If empty, an attempt to auto-discover it is made.
-#    ---
-#    jaeger:
-#      service: "jaeger-query"
-#      url: ""
 #
 # **Prometheus-specific settings:
+# auth: authentication settings to connect to Prometheus:
+#   ca_file: The certificate authority file to use when accessing Prometheus using https. An empty string means no extra
+#       certificate authority file is used. Default is an empty string.
+#   insecure_skip_verify: Set true to skip verifying certificate validity when Kiali contacts Prometheus over https.
+#   password: Password to be used when making requests to Prometheus, for basic authentication.
+#   token: Token / API key to access Prometheus, for token-based authentication.
+#   type: The type of authentication to use when contacting the server from the Kiali backend. Use "bearer" to send the
+#       token to the Prometheus server. Use "basic" to connect with username and password credentials. Use "none" to not use any authentication.
+#       Default is "none"
+#   use_kiali_token: When true and if auth.type is "bearer", Kiali Service Account token will be used for the API calls to Prometheus,
+#       and auth.token config is ignored then.
+#   username: Username to be used when making requests to Prometheus, for basic authentication.
 # custom_metrics_url: The URL used to query the Prometheus Server for building the runtime metrics dashboards.
 #                     This URL must be accessible from the Kiali pod.
 #                     If empty, assumes it is in the istio namespace at the URL "http://prometheus.<istio_namespace>:9090"
@@ -195,7 +224,50 @@ spec:
 #      If empty, assumes it is in the istio namespace at the URL "http://prometheus.<istio_namespace>:9090"
 #    ---
 #    prometheus:
+#      auth:
+#        ca_file: ""
+#        insecure_skip_verify: false
+#        password: ""
+#        token: ""
+#        type: "none"
+#        use_kiali_token: false
+#        username: ""
 #      custom_metrics_url: ""
+#      url: ""
+#
+# **Tracing-specific settings:
+#  - Right now we only support Jaeger
+# auth: authentication settings to connect to Jaeger:
+#   ca_file: The certificate authority file to use when accessing Jaeger using https. An empty string means no extra
+#       certificate authority file is used. Default is an empty string.
+#   insecure_skip_verify: Set true to skip verifying certificate validity when Kiali contacts Jaeger over https.
+#   password: Password to be used when making requests to Jaeger, for basic authentication. User only requires viewer permissions.
+#   token: Token / API key to access Jaeger, for token-based authentication. It only requires viewer permissions.
+#   type: The type of authentication to use when contacting the server from the Kiali backend. Use "bearer" to send the
+#       token to the Prometheus server. Use "basic" to connect with username and password credentials. Use "none" to not use any authentication.
+#       Default is "none"
+#   use_kiali_token: When true and if auth.type is "bearer", the same OAuth token used for authentication in Kiali will be used for the API calls to Grafana,
+#       and auth.token config is ignored then.
+#   username: Username to be used when making requests to Jaeger, for basic authentication. User only requires viewer permissions.
+# enabled: When true, Kiali shows Jaeger and will attempt to autodiscover it.
+# namespace: The Kubernetes namespace that holds the Tracing service (if empty, assumes the same value as deployment.namespace)
+# service: The Kubernetes service name for tracing. Kiali uses this to connect within the cluster to Jaeger.
+# url: The URL that Kiali uses when integrating with Tracing. This URL must be accessible to clients external to
+#      the cluster in order for the integration to work properly. If empty, an attempt to auto-discover it is made.
+#      If tracing service is deployed in a QUERY_BASE_PATH set this in the url like https://<hostname>/<QUERY_BASE_PATH> . EX: https://tracing-service:8080/jaeger
+#    ---
+#    tracing:
+#      auth:
+#        ca_file: ""
+#        insecure_skip_verify: false
+#        password: ""
+#        token: ""
+#        type: "none"
+#        use_kiali_token: false
+#        username: ""
+#      enabled: true
+#      namespace: ""
+#      service : ""
 #      url: ""
 
 ##########
@@ -204,12 +276,16 @@ spec:
 #
 # Certificate file used to identify the file server. If set, you must go over https to access Kiali.
 # The operator will set these if it deploys Kiali behind https.
+# When left undefined, the operator will assign a cluster-specific cert file to provide https by default.
+# When set to an empty string, https will be disabled.
 #    ---
-#    cert_file: ""
+#    #cert_file:
 #
 # Private key file used to identify the server. If set, you must go over https to access Kiali.
+# When left undefined, the operator will assign a cluster-specific private key file to provide https by default.
+# When set to an empty string, https will be disabled.
 #    ---
-#    private_key_file: ""
+#    #private_key_file:
 
 ##########
 #  ---

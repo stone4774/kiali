@@ -1,6 +1,8 @@
 package destinationrules
 
 import (
+	"strings"
+
 	"github.com/kiali/kiali/kubernetes"
 	"github.com/kiali/kiali/models"
 )
@@ -9,6 +11,7 @@ const DestinationRulesCheckerType = "destinationrule"
 
 type MultiMatchChecker struct {
 	DestinationRules []kubernetes.IstioObject
+	ServiceEntries   map[string][]string
 }
 
 type subset struct {
@@ -20,7 +23,7 @@ type subset struct {
 func (m MultiMatchChecker) Check() models.IstioValidations {
 	validations := models.IstioValidations{}
 
-	// Equality search is: [fqdn][subset]
+	// Equality search is: [fqdn.Service][subset] except for ServiceEntry targets which use [host][subset]
 	seenHostSubsets := make(map[string]map[string]string)
 
 	for _, dr := range m.DestinationRules {
@@ -28,6 +31,14 @@ func (m MultiMatchChecker) Check() models.IstioValidations {
 			destinationRulesName := dr.GetObjectMeta().Name
 			if dHost, ok := host.(string); ok {
 				fqdn := kubernetes.ParseHost(dHost, dr.GetObjectMeta().Namespace, dr.GetObjectMeta().ClusterName)
+
+				if fqdn.Namespace != dr.GetObjectMeta().Namespace && !strings.HasPrefix(fqdn.Service, "*") && fqdn.Namespace != "" {
+					// Unable to verify if the same host+subset combination is targeted from different namespace DRs
+					// "*" check removes the prefix errors
+					key, rrValidation := createError("validation.unable.cross-namespace", dr.GetObjectMeta().Name, true)
+					validations.MergeValidations(models.IstioValidations{key: rrValidation})
+					continue
+				}
 
 				// Skip DR validation if it enables mTLS either namespace or mesh-wide
 				if isNonLocalmTLSForServiceEnabled(dr, fqdn.Service) {
@@ -67,8 +78,18 @@ func (m MultiMatchChecker) Check() models.IstioValidations {
 	return validations
 }
 
+func (m MultiMatchChecker) matchingServiceEntry(host string) bool {
+	for k := range m.ServiceEntries {
+		if k == host {
+			return true
+		}
+	}
+
+	return false
+}
+
 func isNonLocalmTLSForServiceEnabled(dr kubernetes.IstioObject, service string) bool {
-	return service == "*" && ismTLSEnabled(dr)
+	return strings.HasPrefix(service, "*") && ismTLSEnabled(dr)
 }
 
 func ismTLSEnabled(dr kubernetes.IstioObject) bool {
@@ -131,20 +152,26 @@ func checkCollisions(validations models.IstioValidations, destinationRulesName s
 
 func addError(validations models.IstioValidations, destinationRuleNames []string) models.IstioValidations {
 	for _, destinationRuleName := range destinationRuleNames {
-		key := models.IstioValidationKey{Name: destinationRuleName, ObjectType: DestinationRulesCheckerType}
-		checks := models.Build("destinationrules.multimatch", "spec/host")
-		rrValidation := &models.IstioValidation{
-			Name:       destinationRuleName,
-			ObjectType: DestinationRulesCheckerType,
-			Valid:      true,
-			Checks: []*models.IstioCheck{
-				&checks,
-			},
-		}
+		key, rrValidation := createError("destinationrules.multimatch", destinationRuleName, true)
 
 		if _, exists := validations[key]; !exists {
 			validations.MergeValidations(models.IstioValidations{key: rrValidation})
 		}
 	}
 	return validations
+}
+
+func createError(errorText, destinationRuleName string, valid bool) (models.IstioValidationKey, *models.IstioValidation) {
+	key := models.IstioValidationKey{Name: destinationRuleName, ObjectType: DestinationRulesCheckerType}
+	checks := models.Build(errorText, "spec/host")
+	rrValidation := &models.IstioValidation{
+		Name:       destinationRuleName,
+		ObjectType: DestinationRulesCheckerType,
+		Valid:      valid,
+		Checks: []*models.IstioCheck{
+			&checks,
+		},
+	}
+
+	return key, rrValidation
 }

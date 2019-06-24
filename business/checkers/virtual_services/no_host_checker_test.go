@@ -85,7 +85,7 @@ func TestValidServiceEntryHost(t *testing.T) {
 	virtualService := data.CreateVirtualServiceWithServiceEntryTarget()
 
 	validations, valid := NoHostChecker{
-		Namespace:      "test-namespace",
+		Namespace:      "wikipedia",
 		ServiceNames:   []string{"my-wiki-rule"},
 		VirtualService: virtualService,
 	}.Check()
@@ -97,8 +97,40 @@ func TestValidServiceEntryHost(t *testing.T) {
 	serviceEntry := data.CreateExternalServiceEntry()
 
 	validations, valid = NoHostChecker{
-		Namespace:         "test-namespace",
+		Namespace:         "wikipedia",
 		ServiceNames:      []string{"my-wiki-rule"},
+		VirtualService:    virtualService,
+		ServiceEntryHosts: kubernetes.ServiceEntryHostnames([]kubernetes.IstioObject{serviceEntry}),
+	}.Check()
+
+	assert.True(valid)
+	assert.Empty(validations)
+}
+
+func TestValidWildcardServiceEntryHost(t *testing.T) {
+	conf := config.NewConfig()
+	config.Set(conf)
+
+	assert := assert.New(t)
+
+	virtualService := data.AddRoutesToVirtualService("http", data.CreateRoute("www.google.com", "v1", -1),
+		data.CreateEmptyVirtualService("googleIt", "google", []string{"www.google.com"}))
+
+	validations, valid := NoHostChecker{
+		Namespace:      "google",
+		ServiceNames:   []string{"duckduckgo"},
+		VirtualService: virtualService,
+	}.Check()
+
+	assert.False(valid)
+	assert.NotEmpty(validations)
+
+	// Add ServiceEntry for validity
+	serviceEntry := data.CreateEmptyMeshExternalServiceEntry("googlecard", "google", []string{"*.google.com"})
+
+	validations, valid = NoHostChecker{
+		Namespace:         "google",
+		ServiceNames:      []string{"duckduckgo"},
 		VirtualService:    virtualService,
 		ServiceEntryHosts: kubernetes.ServiceEntryHostnames([]kubernetes.IstioObject{serviceEntry}),
 	}.Check()

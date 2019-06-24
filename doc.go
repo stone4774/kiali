@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kiali/kiali/graph/cytoscape"
+	"github.com/kiali/kiali/graph/config/cytoscape"
 	"github.com/kiali/kiali/handlers"
 	"github.com/kiali/kiali/models"
 	"github.com/kiali/kiali/prometheus"
@@ -40,7 +40,7 @@ type ContainerParam struct {
 	Name string `json:"container"`
 }
 
-// swagger:parameters istioConfigList  workloadList workloadDetails serviceDetails workloadValidations appList serviceMetrics appMetrics workloadMetrics istioConfigDetails istioConfigDetailsSubtype istioConfigDelete istioConfigDeleteSubtype istioConfigUpdate istioConfigUpdateSubtype serviceList appDetails graphApp graphAppVersion graphNamespace graphService graphWorkload namespaceMetrics customDashboard appDashboard serviceDashboard workloadDashboard istioConfigCreate istioConfigCreateSubtype namespaceTls podDetails podLogs
+// swagger:parameters istioConfigList workloadList workloadDetails serviceDetails workloadValidations appList serviceMetrics appMetrics workloadMetrics istioConfigDetails istioConfigDetailsSubtype istioConfigDelete istioConfigDeleteSubtype istioConfigUpdate istioConfigUpdateSubtype serviceList appDetails graphApp graphAppVersion graphNamespace graphService graphWorkload namespaceMetrics customDashboard appDashboard serviceDashboard workloadDashboard istioConfigCreate istioConfigCreateSubtype namespaceTls podDetails podLogs getThreeScaleService postThreeScaleService patchThreeScaleService deleteThreeScaleService
 type NamespaceParam struct {
 	// The namespace name.
 	//
@@ -86,7 +86,7 @@ type PodParam struct {
 	Name string `json:"pod"`
 }
 
-// swagger:parameters serviceDetails serviceMetrics graphService serviceDashboard
+// swagger:parameters serviceDetails serviceMetrics graphService serviceDashboard getThreeScaleService patchThreeScaleService deleteThreeScaleService
 type ServiceParam struct {
 	// The service name.
 	//
@@ -564,6 +564,13 @@ type AuthenticationInfoResponse struct {
 	AuthorizationEndpoint string
 }
 
+// Return the mTLS status of the whole Mesh
+// swagger:response meshTlsResponse
+type MeshTlsResponse struct {
+	// in:body
+	Body models.MTLSStatus
+}
+
 // Return the mTLS status of a specific Namespace
 // swagger:response namespaceTlsResponse
 type NamespaceTlsResponse struct {
@@ -582,3 +589,33 @@ type TypedIstioValidations map[string]NameIstioValidation
 // List of validations grouped by object name
 // swagger:model
 type NameIstioValidation map[string]models.IstioValidation
+
+// Return if ThreeScale adapter is enabled in Istio and if user has permissions to write adapter's configuration
+// swagger:response threeScaleInfoResponse
+type ThreeScaleInfoResponse struct {
+	// in: body
+	Body models.ThreeScaleInfo
+}
+
+// List of ThreeScale handlers created from Kiali to be used in the adapter's configuration
+// swagger:response threeScaleHandlersResponse
+type ThreeScaleGetHandlersResponse struct {
+	// in: body
+	Body models.ThreeScaleHandlers
+}
+
+// swagger:parameters patchThreeScaleHandler deleteThreeScaleHandler
+type ThreScaleHandlerNameParam struct {
+	// The ThreeScaleHandler name.
+	//
+	// in: path
+	// required: true
+	Name string `json:"threescaleHandlerName"`
+}
+
+// Return Threescale rule definition for a given service
+// swagger:response threeScaleRuleResponse
+type ThreeScaleGetRuleResponse struct {
+	// in: body
+	Body models.ThreeScaleServiceRule
+}

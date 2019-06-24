@@ -25,45 +25,64 @@ kiali_defaults:
     strategy: ""
 
   deployment:
+    accessible_namespaces: ["^((?!(istio-operator|kube.*|openshift.*|ibm.*|kiali-operator)).)*$"]
     #additional_service_yaml:
     image_name: "kiali/kiali"
     image_pull_policy: "IfNotPresent"
     image_version: "lastrelease"
+    ingress_enabled: true
     namespace: "istio-system"
     secret_name: "kiali"
     service_type: "NodePort"
-    verbose_mode: "4"
+    verbose_mode: "3"
     version_label: ""
     view_only_mode: false
 
   external_services:
     grafana:
-      api_key: ""
+      auth:
+        ca_file: ""
+        insecure_skip_verify: false
+        password: ""
+        token: ""
+        type: "none"
+        use_kiali_token: false
+        username: ""
       display_link: true
-      password: ""
-      service: "grafana"
-      service_dashboard_pattern: "Istio%20Service%20Dashboard"
-      service_namespace: ""
+      in_cluster_url: ""
       url: ""
-      username: ""
-      var_namespace: "var-namespace"
-      var_service: "var-service"
-      var_workload: "var-workload"
-      workload_dashboard_pattern: "Istio%20Workload%20Dashboard"
     istio:
       istio_identity_domain: "svc.cluster.local"
       istio_sidecar_annotation: "sidecar.istio.io/status"
       url_service_version: ""
-    jaeger:
-      service: "jaeger-query"
-      url: ""
     prometheus:
+      auth:
+        ca_file: ""
+        insecure_skip_verify: false
+        password: ""
+        token: ""
+        type: "none"
+        use_kiali_token: false
+        username: ""
       custom_metrics_url: ""
       url: ""
+    tracing:
+      auth:
+        ca_file: ""
+        insecure_skip_verify: false
+        password: ""
+        token: ""
+        type: "none"
+        use_kiali_token: false
+        username: ""
+      enabled: true
+      namespace: ""
+      service: ""
+      url: ""
 
-  identity:
-    cert_file: ""
-    private_key_file: ""
+  identity: {}
+    #cert_file:
+    #private_key_file:
 
   istio_labels:
     app_label_name: "app"

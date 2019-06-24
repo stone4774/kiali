@@ -3,8 +3,10 @@ package kubetest
 import (
 	"fmt"
 
+	"github.com/kiali/kiali/kubernetes"
 	osapps_v1 "github.com/openshift/api/apps/v1"
 	osproject_v1 "github.com/openshift/api/project/v1"
+	osroutes_v1 "github.com/openshift/api/route/v1"
 	"github.com/stretchr/testify/mock"
 	apps_v1 "k8s.io/api/apps/v1"
 	auth_v1 "k8s.io/api/authorization/v1"
@@ -13,17 +15,13 @@ import (
 	core_v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
-	"k8s.io/client-go/rest"
-
-	"github.com/kiali/kiali/kubernetes"
 )
 
 //// Mock for the K8SClientFactory
 
 type K8SClientFactoryMock struct {
 	mock.Mock
-	baseIstioConfig *rest.Config
-	k8s             kubernetes.IstioClientInterface
+	k8s kubernetes.IstioClientInterface
 }
 
 // Constructor
@@ -92,8 +90,8 @@ func (o *K8SClientMock) GetAdapter(namespace, adapterType, adapterName string) (
 	return args.Get(0).(kubernetes.IstioObject), args.Error(1)
 }
 
-func (o *K8SClientMock) GetAdapters(namespace string) ([]kubernetes.IstioObject, error) {
-	args := o.Called(namespace)
+func (o *K8SClientMock) GetAdapters(namespace, labelSelector string) ([]kubernetes.IstioObject, error) {
+	args := o.Called(namespace, labelSelector)
 	return args.Get(0).([]kubernetes.IstioObject), args.Error(1)
 }
 
@@ -110,6 +108,27 @@ func (o *K8SClientMock) GetDeployment(namespace string, deploymentName string) (
 func (o *K8SClientMock) GetDeployments(namespace string) ([]apps_v1.Deployment, error) {
 	args := o.Called(namespace)
 	return args.Get(0).([]apps_v1.Deployment), args.Error(1)
+}
+
+// It returns an error on any problem.
+func (o *K8SClientMock) GetDeploymentsByLabel(namespace string, labelSelector string) ([]apps_v1.Deployment, error) {
+	args := o.Called(namespace, labelSelector)
+	return args.Get(0).([]apps_v1.Deployment), args.Error(1)
+}
+
+func (o *K8SClientMock) GetRoute(namespace, name string) (*osroutes_v1.Route, error) {
+	args := o.Called(namespace, name)
+	return args.Get(0).(*osroutes_v1.Route), args.Error(1)
+}
+
+func (o *K8SClientMock) GetSidecar(namespace string, sidecar string) (kubernetes.IstioObject, error) {
+	args := o.Called(namespace)
+	return args.Get(0).(kubernetes.IstioObject), args.Error(1)
+}
+
+func (o *K8SClientMock) GetSidecars(namespace string) ([]kubernetes.IstioObject, error) {
+	args := o.Called(namespace)
+	return args.Get(0).([]kubernetes.IstioObject), args.Error(1)
 }
 
 func (o *K8SClientMock) GetDeploymentConfig(namespace string, deploymentName string) (*osapps_v1.DeploymentConfig, error) {
@@ -157,8 +176,8 @@ func (o *K8SClientMock) GetIstioRule(namespace string, istiorule string) (kubern
 	return args.Get(0).(kubernetes.IstioObject), args.Error(1)
 }
 
-func (o *K8SClientMock) GetIstioRules(namespace string) ([]kubernetes.IstioObject, error) {
-	args := o.Called(namespace)
+func (o *K8SClientMock) GetIstioRules(namespace string, labelSelector string) ([]kubernetes.IstioObject, error) {
+	args := o.Called(namespace, labelSelector)
 	return args.Get(0).([]kubernetes.IstioObject), args.Error(1)
 }
 
@@ -272,8 +291,8 @@ func (o *K8SClientMock) GetTemplate(namespace, templateType, templateName string
 	return args.Get(0).(kubernetes.IstioObject), args.Error(1)
 }
 
-func (o *K8SClientMock) GetTemplates(namespace string) ([]kubernetes.IstioObject, error) {
-	args := o.Called(namespace)
+func (o *K8SClientMock) GetTemplates(namespace, labelSelector string) ([]kubernetes.IstioObject, error) {
+	args := o.Called(namespace, labelSelector)
 	return args.Get(0).([]kubernetes.IstioObject), args.Error(1)
 }
 

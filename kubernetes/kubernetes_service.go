@@ -5,6 +5,7 @@ import (
 
 	osapps_v1 "github.com/openshift/api/apps/v1"
 	osproject_v1 "github.com/openshift/api/project/v1"
+	osroutes_v1 "github.com/openshift/api/route/v1"
 	apps_v1 "k8s.io/api/apps/v1"
 	auth_v1 "k8s.io/api/authorization/v1"
 	batch_v1 "k8s.io/api/batch/v1"
@@ -139,13 +140,39 @@ func (in *IstioClient) GetDeployment(namespace, deploymentName string) (*apps_v1
 	return in.k8s.AppsV1().Deployments(namespace).Get(deploymentName, emptyGetOptions)
 }
 
-// GetDeployments returns an array of deployments for a given namespace and a set of labels.
+// GetRoute returns the external URL endpoint of a specific route name.
+// It returns an error on any problem.
+func (in *IstioClient) GetRoute(namespace, name string) (*osroutes_v1.Route, error) {
+	result := &osroutes_v1.Route{}
+	err := in.k8s.RESTClient().Get().Prefix("apis", "route.openshift.io", "v1").Namespace(namespace).Resource("routes").SubResource(name).Do().Into(result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetDeployments returns an array of deployments for a given namespace.
 // It returns an error on any problem.
 func (in *IstioClient) GetDeployments(namespace string) ([]apps_v1.Deployment, error) {
 	if in.k8sCache != nil {
 		return in.k8sCache.GetDeployments(namespace)
 	}
 	if depList, err := in.k8s.AppsV1().Deployments(namespace).List(emptyListOptions); err == nil {
+		return depList.Items, nil
+	} else {
+		return []apps_v1.Deployment{}, err
+	}
+}
+
+// GetDeployments returns an array of deployments for a given namespace and a set of labels.
+// An empty labelSelector will fetch all Deployments for a namespace.
+// It returns an error on any problem.
+func (in *IstioClient) GetDeploymentsByLabel(namespace string, labelSelector string) ([]apps_v1.Deployment, error) {
+	if in.k8sCache != nil {
+		return in.k8sCache.GetDeployments(namespace)
+	}
+	listOptions := meta_v1.ListOptions{LabelSelector: labelSelector}
+	if depList, err := in.k8s.AppsV1().Deployments(namespace).List(listOptions); err == nil {
 		return depList.Items, nil
 	} else {
 		return []apps_v1.Deployment{}, err
@@ -163,7 +190,7 @@ func (in *IstioClient) GetDeploymentConfig(namespace, deploymentconfigName strin
 	return result, nil
 }
 
-// GetDeployments returns an array of deployments for a given namespace and a set of labels.
+// GetDeployments returns an array of deployments for a given namespace.
 // An empty labelSelector will fetch all Deployments for a namespace.
 // It returns an error on any problem.
 func (in *IstioClient) GetDeploymentConfigs(namespace string) ([]osapps_v1.DeploymentConfig, error) {

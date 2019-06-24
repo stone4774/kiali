@@ -3,7 +3,7 @@ SHELL=/bin/bash
 
 # Identifies the current build.
 # These will be embedded in the app and displayed when it starts.
-VERSION ?= v0.20.0-SNAPSHOT
+VERSION ?= v1.0.0-SNAPSHOT
 COMMIT_HASH ?= $(shell git rev-parse HEAD)
 
 # Indicates which version of the UI console is to be embedded
@@ -13,7 +13,7 @@ COMMIT_HASH ?= $(shell git rev-parse HEAD)
 # WARNING: If you have previously run the 'docker' target but
 # later want to change the CONSOLE_VERSION then you must run
 # the 'clean' target first before re-running the 'docker' target.
-CONSOLE_VERSION ?= latest
+CONSOLE_VERSION ?= 1.0.0
 CONSOLE_LOCAL_DIR ?= ../../../../../kiali-ui
 
 # Version label is used in the OpenShift/K8S resources to identify
@@ -286,8 +286,8 @@ gometalinter-install:
 ## lint: Runs gometalinter
 # doc.go is ommited for linting, because it generates lots of warnings.
 lint:
-	gometalinter --disable-all --enable=vet --enable=staticcheck --tests --deadline=300s --vendor $$(glide nv | grep -v '^\.$$')
-	gometalinter --disable-all --enable=vet --enable=staticcheck --tests --deadline=300s --vendor kiali.go
+	gometalinter --disable-all --enable=vet --enable=staticcheck --tests --deadline=500s --vendor $$(glide nv | grep -v '^\.$$')
+	gometalinter --disable-all --enable=vet --enable=staticcheck --tests --deadline=500s --vendor kiali.go
 
 ## lint-all: Runs gometalinter with items from good to have list but does not run during travis
 lint-all:

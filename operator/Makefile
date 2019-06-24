@@ -2,6 +2,7 @@
 OPERATOR_IMAGE_NAME ?= quay.io/kiali/kiali-operator
 OPERATOR_IMAGE_VERSION ?= dev
 OPERATOR_NAMESPACE ?= kiali-operator
+OPERATOR_WATCH_NAMESPACE ?= kiali-operator
 
 # When deploying the Kiali operator via operator-create target, this indicates if it should install Kiali also.
 OPERATOR_INSTALL_KIALI ?= false
@@ -10,9 +11,9 @@ OPERATOR_INSTALL_KIALI ?= false
 AUTH_STRATEGY ?= openshift
 CREDENTIALS_USERNAME ?= admin
 CREDENTIALS_PASSPHRASE ?= admin
-IMAGE_VERSION ?= dev
+KIALI_IMAGE_VERSION ?= dev
 NAMESPACE ?= istio-system
-VERBOSE_MODE ?= 4
+VERBOSE_MODE ?= 3
 SERVICE_TYPE ?= NodePort
 
 # Find the client executable (either istiooc or oc or kubectl)
@@ -41,7 +42,7 @@ help: Makefile
 
 .ensure-operator-sdk-exists: .download-operator-sdk-if-needed
 	@$(eval OP_SDK ?= $(shell which operator-sdk 2>/dev/null || echo "../_output/operator-sdk-install/operator-sdk"))
-	@"${OP_SDK}" --version
+	@"${OP_SDK}" version
 
 ## operator-build: Build the Kiali operator container image
 # Requires operator-sdk - download it from https://github.com/operator-framework/operator-sdk/releases
@@ -75,11 +76,13 @@ operator-create: operator-delete .ensure-operator-ns-does-not-exist
 	OPERATOR_IMAGE_NAME="${OPERATOR_IMAGE_NAME}" \
 OPERATOR_IMAGE_VERSION="${OPERATOR_IMAGE_VERSION}" \
 OPERATOR_NAMESPACE="${OPERATOR_NAMESPACE}" \
+OPERATOR_WATCH_NAMESPACE="${OPERATOR_WATCH_NAMESPACE}" \
 OPERATOR_INSTALL_KIALI="${OPERATOR_INSTALL_KIALI}" \
+ACCESSIBLE_NAMESPACES="${ACCESSIBLE_NAMESPACES}" \
 AUTH_STRATEGY="${AUTH_STRATEGY}" \
 CREDENTIALS_USERNAME="${CREDENTIALS_USERNAME}" \
 CREDENTIALS_PASSPHRASE="${CREDENTIALS_PASSPHRASE}" \
-IMAGE_VERSION="${IMAGE_VERSION}" \
+KIALI_IMAGE_VERSION="${KIALI_IMAGE_VERSION}" \
 NAMESPACE="${NAMESPACE}" \
 deploy/deploy-kiali-operator.sh
 
@@ -101,7 +104,7 @@ secret-delete:
 	${OC} delete --ignore-not-found=true secret --selector="app=kiali" -n "${NAMESPACE}"
 
 ## kiali-create: Create a Kiali CR to the cluster, informing the Kiali operator to install Kiali.
-ifeq ($(AUTH_STRATEGY), "login")
+ifeq ($(AUTH_STRATEGY),login)
 kiali-create: secret-create
 else
 kiali-create:
@@ -109,21 +112,21 @@ endif
 	@echo Deploy Kiali using the settings found in deploy/kiali/kiali_cr_dev.yaml
 	cat deploy/kiali/kiali_cr_dev.yaml | \
 AUTH_STRATEGY="${AUTH_STRATEGY}" \
-IMAGE_VERSION=${IMAGE_VERSION} \
+KIALI_IMAGE_VERSION=${KIALI_IMAGE_VERSION} \
 NAMESPACE="${NAMESPACE}" \
 VERBOSE_MODE="${VERBOSE_MODE}" \
 SERVICE_TYPE="${SERVICE_TYPE}" \
-envsubst | ${OC} apply -n "${OPERATOR_NAMESPACE}" -f -
+envsubst | ${OC} apply -n "${OPERATOR_WATCH_NAMESPACE}" -f -
 
 ## kiali-delete: Remove a Kiali CR from the cluster, informing the Kiali operator to uninstall Kiali.
 kiali-delete: secret-delete
 	@echo Remove Kiali
-	${OC} delete --ignore-not-found=true kiali kiali -n "${OPERATOR_NAMESPACE}"
+	${OC} delete --ignore-not-found=true kiali kiali -n "${OPERATOR_WATCH_NAMESPACE}"
 
 ## purge-kiali: Purges all Kiali resources directly without going through the operator or ansible.
 purge-kiali:
 	@echo Purge Kiali resources
-	${OC} patch kiali kiali -n "${OPERATOR_NAMESPACE}" -p '{"metadata":{"finalizers": []}}' --type=merge ; true
+	${OC} patch kiali kiali -n "${OPERATOR_WATCH_NAMESPACE}" -p '{"metadata":{"finalizers": []}}' --type=merge ; true
 	${OC} delete --ignore-not-found=true all,secrets,sa,templates,configmaps,deployments,clusterroles,clusterrolebindings,ingresses,customresourcedefinitions --selector="app=kiali" -n "${NAMESPACE}"
 	${OC} delete --ignore-not-found=true oauthclients.oauth.openshift.io --selector="app=kiali" -n "${NAMESPACE}" ; true
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-version"
 	kversion "k8s.io/apimachinery/pkg/version"
@@ -15,6 +16,7 @@ import (
 	"github.com/kiali/kiali/config"
 	"github.com/kiali/kiali/kubernetes"
 	"github.com/kiali/kiali/log"
+	"github.com/kiali/kiali/util/httputil"
 )
 
 type externalService func() (*ExternalServiceInfo, error)
@@ -39,12 +41,16 @@ func getVersions() {
 		kubernetesVersion,
 	}
 
-	if config.Get().ExternalServices.Jaeger.URL != "" {
-		components = append(components, jaegerVersion)
+	if config.Get().ExternalServices.Grafana.DisplayLink {
+		components = append(components, grafanaVersion)
+	} else {
+		log.Debugf("Grafana is disabled in Kiali by configuration")
 	}
 
-	if config.Get().ExternalServices.Grafana.URL != "" {
-		components = append(components, grafanaVersion)
+	if config.Get().ExternalServices.Tracing.Enabled {
+		components = append(components, jaegerVersion)
+	} else {
+		log.Debugf("Jaeger is disabled in Kiali by configuration")
 	}
 
 	for _, comp := range components {
@@ -187,7 +193,7 @@ type p8sResponseVersion struct {
 func jaegerVersion() (*ExternalServiceInfo, error) {
 	product := ExternalServiceInfo{}
 	product.Name = "Jaeger"
-	product.Url = config.Get().ExternalServices.Jaeger.URL
+	product.Url = DiscoverJaeger()
 
 	return &product, nil
 }
@@ -195,7 +201,7 @@ func jaegerVersion() (*ExternalServiceInfo, error) {
 func grafanaVersion() (*ExternalServiceInfo, error) {
 	product := ExternalServiceInfo{}
 	product.Name = "Grafana"
-	product.Url = config.Get().ExternalServices.Grafana.URL
+	product.Url = DiscoverGrafana()
 
 	return &product, nil
 }
@@ -203,11 +209,22 @@ func grafanaVersion() (*ExternalServiceInfo, error) {
 func prometheusVersion() (*ExternalServiceInfo, error) {
 	product := ExternalServiceInfo{}
 	prometheusV := new(p8sResponseVersion)
-	prometheusUrl := config.Get().ExternalServices.Prometheus.URL
-	resp, err := http.Get(prometheusUrl + "/version")
+	cfg := config.Get().ExternalServices.Prometheus
+
+	// Be sure to copy config.Auth and not modify the existing
+	auth := cfg.Auth
+	if auth.UseKialiToken {
+		token, err := kubernetes.GetKialiToken()
+		if err != nil {
+			log.Errorf("Could not read the Kiali Service Account token: %v", err)
+			return nil, err
+		}
+		auth.Token = token
+	}
+
+	body, _, err := httputil.HttpGet(cfg.URL+"/version", &auth, 10*time.Second)
 	if err == nil {
-		defer resp.Body.Close()
-		err = json.NewDecoder(resp.Body).Decode(&prometheusV)
+		err = json.Unmarshal(body, &prometheusV)
 		if err == nil {
 			product.Name = "Prometheus"
 			product.Version = prometheusV.Version
