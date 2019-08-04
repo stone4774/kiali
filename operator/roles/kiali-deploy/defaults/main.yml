@@ -29,6 +29,7 @@ kiali_defaults:
     #additional_service_yaml:
     image_name: "kiali/kiali"
     image_pull_policy: "IfNotPresent"
+    image_pull_secrets: []
     image_version: "lastrelease"
     ingress_enabled: true
     namespace: "istio-system"
@@ -48,7 +49,7 @@ kiali_defaults:
         type: "none"
         use_kiali_token: false
         username: ""
-      display_link: true
+      enabled: true
       in_cluster_url: ""
       url: ""
     istio:
@@ -77,6 +78,7 @@ kiali_defaults:
         username: ""
       enabled: true
       namespace: ""
+      port: 16686
       service: ""
       url: ""
 
@@ -95,8 +97,8 @@ kiali_defaults:
     cache_duration: 300000000
 
   login_token:
-    signing_key: "kiali"
     expiration_seconds: 86400
+    signing_key: "kiali"
 
   server:
     address: ""

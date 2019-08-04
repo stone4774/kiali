@@ -102,7 +102,7 @@ func ServiceDetails(w http.ResponseWriter, r *http.Request) {
 		go func(istioConfigValidations *models.IstioValidations, err *error) {
 			defer wg.Done()
 			istioConfigValidationResults, errValidations := business.Validations.GetValidations(namespace, service)
-			if errValidations != nil && err == nil {
+			if errValidations != nil && *err == nil {
 				*err = errValidations
 			} else {
 				*istioConfigValidations = istioConfigValidationResults
@@ -154,7 +154,7 @@ func ServiceDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	svc := business.NewDashboardsService(nil, prom)
+	svc := business.NewDashboardsService(prom)
 	dashboard, err := svc.GetIstioDashboard(params)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, err.Error())

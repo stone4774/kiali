@@ -121,7 +121,15 @@ fi
 if [[ "$CLIENT_EXE" = *"oc" ]]; then
   $CLIENT_EXE new-project ${NAMESPACE}
   $CLIENT_EXE adm policy add-scc-to-user anyuid -z default -n ${NAMESPACE}
+  $CLIENT_EXE adm policy add-scc-to-user anyuid -z bookinfo-details -n ${NAMESPACE}
+  $CLIENT_EXE adm policy add-scc-to-user anyuid -z bookinfo-productpage -n ${NAMESPACE}
+  $CLIENT_EXE adm policy add-scc-to-user anyuid -z bookinfo-ratings -n ${NAMESPACE}
+  $CLIENT_EXE adm policy add-scc-to-user anyuid -z bookinfo-reviews -n ${NAMESPACE}
   $CLIENT_EXE adm policy add-scc-to-user privileged -z default -n ${NAMESPACE}
+  $CLIENT_EXE adm policy add-scc-to-user privileged -z bookinfo-details -n ${NAMESPACE}
+  $CLIENT_EXE adm policy add-scc-to-user privileged -z bookinfo-productpage -n ${NAMESPACE}
+  $CLIENT_EXE adm policy add-scc-to-user privileged -z bookinfo-ratings -n ${NAMESPACE}
+  $CLIENT_EXE adm policy add-scc-to-user privileged -z bookinfo-reviews -n ${NAMESPACE}
 else
   $CLIENT_EXE create namespace ${NAMESPACE}
 fi
@@ -165,7 +173,7 @@ $CLIENT_EXE get pods -n ${NAMESPACE}
 # If OpenShift, we need to do some additional things
 if [[ "$CLIENT_EXE" = *"oc" ]]; then
   $CLIENT_EXE expose svc productpage -n ${NAMESPACE}
-  $CLIENT_EXE expose svc istio-ingressgateway -n istio-system
+  $CLIENT_EXE expose svc istio-ingressgateway --port http2 -n istio-system
 fi
 
 if [ "${TRAFFIC_GENERATOR_ENABLED}" == "true" ]; then
